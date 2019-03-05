@@ -1,4 +1,4 @@
-unit Data.Win.OleDbUtils;
+unit OleDbUtils;
 
 interface
 
