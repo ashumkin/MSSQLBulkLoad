@@ -1,18 +1,22 @@
 unit OleDbUtils;
 
+{$IF CompilerVersion > 21}
+{$DEFINE DELPHI_XE}
+{$IFEND}
+
 interface
 
 uses
-  System.Classes,
-  System.SysUtils,
-  System.Win.ComObj,
-  Winapi.Windows,
-  Winapi.ActiveX,
-  Winapi.ADOInt,
-  Winapi.OleDb,
-  Data.DB,
-  Data.Win.ADOConst,
-  Data.Win.ADODB;
+  Classes,
+  SysUtils,
+  ComObj,
+  Windows,
+  ActiveX,
+  ADOInt,
+  OleDb,
+  DB,
+  ADOConst,
+  ADODB;
 
 const
   DBPROPSET_SQLSERVERDATASOURCE: TGUID = '{28EFAEE4-2D2C-11D1-9807-00C04FC2AD98}';
@@ -86,7 +90,18 @@ procedure SetProperty(Connection: TADOConnection; const PropertySetID: TGUID; Pr
 implementation
 
 uses
-  System.Variants;
+  Variants;
+
+{$IFNDEF DELPHI_XE}
+function WStrLen(const Str: PWideChar): Cardinal;
+var
+  P : PWideChar;
+begin
+  P := Str;
+  while (P^ <> #0) do Inc(P);
+  Result := (P - Str);
+end;
+{$ENDIF}
 
 procedure Align(var Value: Integer; Alignment: Byte = 8); forward;
 procedure GetFieldValue(Field: TField; const Binding: TDBBinding; Buffer: Pointer; BlobList: TList); forward;
@@ -176,12 +191,16 @@ begin
     ftUnknown: Result := DBTYPE_EMPTY;                                             // ?
     ftString, ftMemo, ftFixedChar: Result := DBTYPE_STR;                           // varchar
     ftWideString, ftWideMemo, ftFixedWideChar: Result := DBTYPE_WSTR;              // nvarchar
+{$IFDEF DELPHI_XE}
     ftByte, ftShortint: Result := DBTYPE_I1;                                       // tinyint
+{$ENDIF}
     ftSmallint, ftWord: Result := DBTYPE_I2;                                       // smallint
-    ftInteger, ftAutoInc, ftLongWord: Result := DBTYPE_I4;                         // int, identity
+    ftInteger, ftAutoInc{$IFDEF DELPHI_XE}, ftLongWord{$ENDIF}: Result := DBTYPE_I4;                         // int, identity
     ftBoolean: Result := DBTYPE_BOOL;                                              // bit
     ftFloat: Result := DBTYPE_R8;                                                  // float
+{$IFDEF DELPHI_XE}
     ftSingle: Result := DBTYPE_R4;                                                 // real
+{$ENDIF}
     ftBCD, ftCurrency: Result := DBTYPE_CY;                                        // money
     ftDate: Result := DBTYPE_DBDATE;                                               // date
     ftTime: Result := DBTYPE_DBTIME;                                               // time
@@ -265,7 +284,11 @@ begin
       ftString, ftMemo:
         Column^.Length := StrLen(PAnsiChar(@Column^.Data[0]));
       ftWideString, ftWideMemo:
-        Column^.Length := StrLen(PWideChar(@Column^.Data[0])) * SizeOf(WideChar);
+{$IFDEF DELPHI_XE}
+        Column^.Length := StrLen(PWideChar(@Column^.Data[0])) * SizeOf(WideChar)
+{$ELSE DELPHI_XE}
+        Column^.Length := WStrLen(PWideChar(@Column^.Data[0])) * SizeOf(WideChar);
+{$ENDIF}
       else
         Column^.Length := Field.DataSize;
     end;
