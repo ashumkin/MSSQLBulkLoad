@@ -38,6 +38,35 @@ type
     Data: array[0..0] of Byte;
   end;
 
+  IBulkLoadFieldDef = interface
+    ['{1B80665D-D7BE-4E7A-B214-F2DED9E4D862}']
+    function DataSize: Integer;
+    function DataType: TFieldType;
+    function FieldNo: Integer;
+    procedure SetBindingMaxLen(var ABinding: TDBBinding);
+    procedure SetFieldNo(const AFieldNo: Integer);
+  end;
+
+  IBulkLoadFieldDefs = interface(IInterfaceList)
+    ['{05F01A7D-58B5-4623-AB18-F844FD75C653}']
+    function AddFieldDef(ABulkLoadFieldDef: IBulkLoadFieldDef): IBulkLoadFieldDefs;
+    function GetFields(Index: Integer): IBulkLoadFieldDef;
+
+    property FieldDefs[Index: Integer]: IBulkLoadFieldDef read GetFields;
+  end;
+
+  IBulkLoadField = interface
+    ['{6578BCBC-9087-43D9-B852-6ED85FBA82E7}']
+    procedure FillColumn(AColumn: PColumnData);
+  end;
+
+  IBulkLoader = interface
+    ['{E7795A09-A93A-4532-A5B5-1D670ECEB9CD}']
+    function Append(AField: IBulkLoadField): IBulkLoader;
+    function AppendRow: IBulkLoader;
+    procedure Commit;
+  end;
+
   IRowsetFastLoad = interface
     [SIID_IRowsetFastLoad]
     function InsertRow(hAccessor: HACCESSOR; pData: Pointer): HRESULT; stdcall;
@@ -69,6 +98,146 @@ type
 
   EOleDbError = class(EOleSysError)
     Errors: TOleDbErrorDynArray;
+  end;
+
+  TBulkLoadFieldDef = class(TInterfacedObject, IBulkLoadFieldDef)
+  private
+    FFieldNo: Integer;
+    FDataSize: Integer;
+    FDataType: TFieldType;
+    {$REGION 'IBulkLoadFieldDef'}
+    function DataSize: Integer;
+    function DataType: TFieldType;
+    function FieldNo: Integer;
+    procedure SetBindingMaxLen(var ABinding: TDBBinding); virtual;
+    procedure SetFieldNo(const AFieldNo: Integer);
+    {$ENDREGION}
+  public
+    constructor Create(const ADataType: TFieldType; ADataSize: Integer);
+  end;
+
+  TBulkLoadFieldDefs = class(TInterfaceList, IBulkLoadFieldDefs)
+  private
+    function GetFields(Index: Integer): IBulkLoadFieldDef;
+  public
+    {$REGION 'IBulkLoadFieldDefs'}
+    function AddFieldDef(ABulkLoadFieldDef: IBulkLoadFieldDef): IBulkLoadFieldDefs;
+    {$ENDREGION}
+  end;
+
+  TBulkLoadFieldDefString = class(TBulkLoadFieldDef)
+  public
+    constructor Create(const ALength: Integer);
+  end;
+
+  TBulkLoadFieldDefDateTime = class(TBulkLoadFieldDef)
+  public
+    constructor Create;
+  end;
+
+  TBulkLoadFieldDefCurrency = class(TBulkLoadFieldDef)
+  public
+    constructor Create;
+  end;
+
+  TBulkLoadFieldDefInteger = class(TBulkLoadFieldDef)
+  public
+    constructor Create;
+  end;
+
+  TBulkLoadFieldDefInt64 = class(TBulkLoadFieldDef)
+  public
+    constructor Create;
+  end;
+
+  TBulkLoadField = class(TInterfacedObject, IBulkLoadField)
+  private
+    procedure SetColumnSize(AColumn: PColumnData); virtual;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); virtual;
+    {$ENDREGION}
+  end;
+
+  TBulkLoadFieldNull = class(TBulkLoadField)
+  private
+    procedure FillColumn(AColumn: PColumnData); override;
+  end;
+
+  TBulkLoadFieldString = class(TBulkLoadField)
+  private
+    FString: string;
+    procedure SetColumnSize(AColumn: PColumnData); override;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); override;
+    {$ENDREGION}
+  public
+    constructor Create(const AString: string);
+  end;
+
+  TBulkLoadFieldInteger = class(TBulkLoadField)
+  private
+    FInteger: Integer;
+    procedure SetColumnSize(AColumn: PColumnData); override;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); override;
+    {$ENDREGION}
+  public
+    constructor Create(const AInteger: Integer);
+  end;
+
+  TBulkLoadFieldInt64 = class(TBulkLoadField)
+  private
+    FInt64: Int64;
+    procedure SetColumnSize(AColumn: PColumnData); override;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); override;
+    {$ENDREGION}
+  public
+    constructor Create(const AInt64: Int64);
+  end;
+
+  TBulkLoadFieldCurrency = class(TBulkLoadField)
+  private
+    FCurrency: Currency;
+    procedure SetColumnSize(AColumn: PColumnData); override;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); override;
+    {$ENDREGION}
+  public
+    constructor Create(const ACurrency: Currency);
+  end;
+
+  TBulkLoadFieldDateTime = class(TBulkLoadField)
+  private
+    FDateTime: TDateTime;
+    {$REGION 'IBulkLoadField'}
+    procedure FillColumn(AColumn: PColumnData); override;
+    {$ENDREGION}
+  public
+    constructor Create(const ADateTime: TDateTime);
+  end;
+
+  TMSSQLBulkLoader = class(TInterfacedObject, IBulkLoader)
+  private
+    FAccessor: IAccessor;
+    FConnection: TADOConnection;
+    FFastLoad: IRowsetFastLoad;
+    FStatusCodes: PUintArray;
+    FBindings: PDBBindingArray;
+    FAccessorHandle: THandle;
+    FBuffer: Pointer;
+    FFieldCount: Integer;
+    FAppendedFieldCount: Integer;
+    {$REGION 'IBulkLoader'}
+    function Append(AField: IBulkLoadField): IBulkLoader;
+    function AppendRow: IBulkLoader;
+    procedure Commit;
+    {$ENDREGION}
+    procedure ResetAppendedFieldCount;
+  public
+    constructor Create(AConnection: TADOConnection; const ADstTableName: string;
+      AFields: IBulkLoadFieldDefs);
+    procedure BeforeDestruction; override;
   end;
 
 procedure BulkCopy(Dataset: TDataSet; Connection: TADOConnection; const DstTableName: string);
@@ -217,7 +386,7 @@ begin
   end;
 end;
 
-procedure GetFieldValue(Field: TField; const Binding: TDBBinding; Buffer: Pointer; BlobList: TList);
+procedure GetFieldValue(Field: TField; const Binding: TDBBinding; Buffer: Pointer; BlobList: TList); overload;
 var
   Column: PColumnData;
   BlobStream, Stream: TStream;
@@ -295,7 +464,38 @@ begin
   end;
 end;
 
-procedure InitializeBinding(Field: TField; var Binding: TDBBinding; var Offset: Integer);
+procedure GetFieldValue(AField: IBulkLoadField; const FBinding: TDBBinding; FBuffer: Pointer); overload;
+var
+  LColumn: PColumnData;
+begin
+  LColumn := Pointer(NativeUInt(FBuffer) + FBinding.obLength);
+  // initialize column length with the maximum field length (mostly for strings)
+  LColumn.Length := FBinding.cbMaxLen;
+  AField.FillColumn(LColumn);
+end;
+
+{ TBulkLoadFieldDateTime }
+
+constructor TBulkLoadFieldDateTime.Create(const ADateTime: TDateTime);
+begin
+  inherited Create;
+  FDateTime := ADateTime;
+end;
+
+procedure TBulkLoadFieldDateTime.FillColumn(AColumn: PColumnData);
+var
+  MSec: Word;
+begin
+  with PDBTimeStamp(@AColumn^.Data[0])^ do
+  begin
+    DecodeDate(FDateTime, Word(year), month, day);
+    DecodeTime(FDateTime, hour, minute, second, MSec);
+    fraction := MSec * 1000000;
+  end;
+  inherited FillColumn(AColumn);
+end;
+
+procedure InitializeBinding(Field: TField; var Binding: TDBBinding; var Offset: Integer); overload;
 begin
   Binding.iOrdinal := Field.FieldNo;
   Binding.wType := FieldTypeToOleDbType(Field.DataType);
@@ -320,6 +520,24 @@ begin
 
   Inc(Offset, SizeOf(TColumnData) + Binding.cbMaxLen - 1);
   Align(Offset);
+end;
+
+function InitializeBinding(AField: IBulkLoadFieldDef; var ABinding: TDBBinding; AOffset: Integer): Integer; overload;
+begin
+  ABinding.iOrdinal := AField.FieldNo;
+  ABinding.wType := FieldTypeToOleDbType(AField.DataType);
+  ABinding.eParamIO := DBPARAMIO_NOTPARAM;
+  ABinding.dwMemOwner := DBMEMOWNER_CLIENTOWNED;
+  ABinding.obLength := AOffset;
+  ABinding.obStatus := ABinding.obLength + SizeOf(DBLENGTH);
+  ABinding.obValue := ABinding.obStatus + SizeOf(DBSTATUS);
+  ABinding.dwPart := DBPART_LENGTH or DBPART_STATUS or DBPART_VALUE;
+
+  AField.SetBindingMaxLen(ABinding);
+
+  Inc(AOffset, SizeOf(TColumnData) + ABinding.cbMaxLen - 1);
+  Align(AOffset);
+  Result := AOffset;
 end;
 
 procedure InitializeProperty(var Prop: TDBProp; PropID: DBPROPID; const Value: OleVariant);
@@ -475,6 +693,269 @@ var
 begin
   ConnectionConstruction := Connection.ConnectionObject as ADOConnectionConstruction;
   SetProperty(ConnectionConstruction.Get_DSO as IDBProperties, PropertySetID, PropertyID, Value);
+end;
+
+{ TBulkLoadFieldString }
+
+constructor TBulkLoadFieldString.Create(const AString: string);
+begin
+  inherited Create;
+  FString := AString;
+end;
+
+procedure TBulkLoadFieldString.FillColumn(AColumn: PColumnData);
+var
+  LDest: Pointer;
+begin
+  LDest := @AColumn^.Data[0];
+  // AColumn^.Length must contain maximum field length, see GetFieldValue
+  // copy "field length" bytes
+  // even string is shorter it's ok
+  Move(PChar(FString)^, LDest^, AColumn^.Length);
+  inherited FillColumn(AColumn);
+end;
+
+procedure TBulkLoadFieldString.SetColumnSize(AColumn: PColumnData);
+begin
+  // AColumn^.Length must contain maximum field length, see GetFieldValue
+  if Length(FString) < AColumn^.Length then
+    AColumn^.Length := Length(FString);
+end;
+
+{ TBulkLoadFieldCurrency }
+
+constructor TBulkLoadFieldCurrency.Create(const ACurrency: Currency);
+begin
+  inherited Create;
+  FCurrency := ACurrency;
+end;
+
+procedure TBulkLoadFieldCurrency.FillColumn(AColumn: PColumnData);
+begin
+  PCurrency(@AColumn.Data[0])^ := FCurrency;
+  inherited FillColumn(AColumn);
+end;
+
+procedure TBulkLoadFieldCurrency.SetColumnSize(AColumn: PColumnData);
+begin
+  AColumn^.Length := SizeOf(FCurrency);
+end;
+
+{ TMSSQLBulkLoader }
+
+function TMSSQLBulkLoader.Append(AField: IBulkLoadField): IBulkLoader;
+begin
+  GetFieldValue(AField, FBindings^[FAppendedFieldCount], FBuffer);
+  Inc(FAppendedFieldCount);
+  Result := Self;
+end;
+
+function TMSSQLBulkLoader.AppendRow: IBulkLoader;
+begin
+  ResetAppendedFieldCount;
+  OleDbCheck(FFastLoad.InsertRow(FAccessorHandle, FBuffer), FFastLoad,
+    IID_IRowsetFastLoad, FStatusCodes, FFieldCount);
+  Result := Self;
+end;
+
+procedure TMSSQLBulkLoader.BeforeDestruction;
+begin
+  if Assigned(FAccessor) then
+    OleDbCheck(FAccessor.ReleaseAccessor(FAccessorHandle, nil), FAccessor, IID_IAccessor, nil, 0);
+  FreeMem(FStatusCodes);
+  FreeMem(FBuffer);
+  FreeMem(FBindings);
+  FreeAndNil(FConnection);
+  inherited;
+end;
+
+procedure TMSSQLBulkLoader.Commit;
+begin
+  OleDbCheck(FFastLoad.Commit(True), FFastLoad, IID_IRowsetFastLoad,
+    FStatusCodes, FFieldCount);
+end;
+
+constructor TMSSQLBulkLoader.Create(AConnection: TADOConnection; const
+  ADstTableName: string; AFields: IBulkLoadFieldDefs);
+var
+  LBufferSize: Integer;
+  i: Integer;
+begin
+  inherited Create;
+  FConnection := AConnection;
+  FFieldCount := AFields.Count;
+  ResetAppendedFieldCount;
+  FConnection.Open;
+  try
+    FFastLoad := OpenFastLoad(FConnection, ADstTableName);
+  except
+    FreeAndNil(FConnection);
+    raise;
+  end;
+  FStatusCodes := AllocMem(FFieldCount * SizeOf(DBBINDSTATUS));
+
+  LBufferSize := 0;
+  FBindings := AllocMem(FFieldCount * SizeOf(TDBBinding));
+  for i := 0 to FFieldCount - 1 do
+    LBufferSize := InitializeBinding(AFields.FieldDefs[i], FBindings^[i], LBufferSize);
+
+  FBuffer := AllocMem(LBufferSize);
+
+  OleDbCheck(FFastLoad.QueryInterface(IID_IAccessor, FAccessor), FFastLoad, IID_IRowsetFastLoad, FStatusCodes,
+    FFieldCount);
+  OleDbCheck(FAccessor.CreateAccessor(DBACCESSOR_ROWDATA, FFieldCount, FBindings, LBufferSize,
+    FAccessorHandle, FStatusCodes), FAccessor, IID_IAccessor, FStatusCodes, FFieldCount);
+end;
+
+procedure TMSSQLBulkLoader.ResetAppendedFieldCount;
+begin
+  FAppendedFieldCount := 0;
+end;
+
+{ TBulkLoadFieldDef }
+
+constructor TBulkLoadFieldDef.Create(const ADataType: TFieldType;
+  ADataSize: Integer);
+begin
+  inherited Create;
+  FDataType := ADataType;
+  FDataSize := ADataSize;
+end;
+
+function TBulkLoadFieldDef.DataSize: Integer;
+begin
+  Result := FDataSize;
+end;
+
+function TBulkLoadFieldDef.DataType: TFieldType;
+begin
+  Result := FDataType;
+end;
+
+function TBulkLoadFieldDef.FieldNo: Integer;
+begin
+  Result := FFieldNo;
+end;
+
+procedure TBulkLoadFieldDef.SetBindingMaxLen(var ABinding: TDBBinding);
+begin
+  ABinding.cbMaxLen := DataSize;
+end;
+
+procedure TBulkLoadFieldDef.SetFieldNo(const AFieldNo: Integer);
+begin
+  FFieldNo := AFieldNo;
+end;
+
+{ TBulkLoadFieldDefs }
+
+function TBulkLoadFieldDefs.AddFieldDef(
+  ABulkLoadFieldDef: IBulkLoadFieldDef): IBulkLoadFieldDefs;
+var
+  LAddedIndex: Integer;
+begin
+  LAddedIndex := Add(ABulkLoadFieldDef);
+  GetFields(LAddedIndex).SetFieldNo(LAddedIndex + 1);
+  Result := Self;
+end;
+
+function TBulkLoadFieldDefs.GetFields(Index: Integer): IBulkLoadFieldDef;
+begin
+  Result := Items[Index] as IBulkLoadFieldDef;
+end;
+
+{ TBulkLoadFieldDefString }
+
+constructor TBulkLoadFieldDefString.Create(const ALength: Integer);
+begin
+  inherited Create(ftString, ALength);
+end;
+
+{ TBulkLoadFieldDefDateTime }
+
+constructor TBulkLoadFieldDefDateTime.Create;
+begin
+  inherited Create(ftDateTime, SizeOf(TDBTimeStamp));
+end;
+
+{ TBulkLoadFieldDefCurrency }
+
+constructor TBulkLoadFieldDefCurrency.Create;
+begin
+  inherited Create(ftCurrency, SizeOf(Currency));
+end;
+
+{ TBulkLoadField }
+
+procedure TBulkLoadField.FillColumn(AColumn: PColumnData);
+begin
+  AColumn^.Status := DBSTATUS_S_OK;
+  SetColumnSize(AColumn);
+end;
+
+procedure TBulkLoadField.SetColumnSize(AColumn: PColumnData);
+begin
+  AColumn^.Length := 0;
+end;
+
+{ TBulkLoadFieldNull }
+
+procedure TBulkLoadFieldNull.FillColumn(AColumn: PColumnData);
+begin
+  AColumn^.Status := DBSTATUS_S_ISNULL;
+  SetColumnSize(AColumn);
+end;
+
+{ TBulkLoadFieldDefInteger }
+
+constructor TBulkLoadFieldDefInteger.Create;
+begin
+  inherited Create(ftInteger, SizeOf(Integer));
+end;
+
+{ TBulkLoadFieldInteger }
+
+constructor TBulkLoadFieldInteger.Create(const AInteger: Integer);
+begin
+  inherited Create;
+  FInteger := AInteger;
+end;
+
+procedure TBulkLoadFieldInteger.FillColumn(AColumn: PColumnData);
+begin
+  PInteger(@AColumn.Data[0])^ := FInteger;
+  inherited FillColumn(AColumn);
+end;
+
+procedure TBulkLoadFieldInteger.SetColumnSize(AColumn: PColumnData);
+begin
+  AColumn^.Length := SizeOf(FInteger);
+end;
+
+{ TBulkLoadFieldDefInt64 }
+
+constructor TBulkLoadFieldDefInt64.Create;
+begin
+  inherited Create(ftLargeint, SizeOf(Int64));
+end;
+
+{ TBulkLoadFieldInt64 }
+
+constructor TBulkLoadFieldInt64.Create(const AInt64: Int64);
+begin
+  inherited Create;
+  FInt64 := AInt64;
+end;
+
+procedure TBulkLoadFieldInt64.FillColumn(AColumn: PColumnData);
+begin
+  PInt64(@AColumn.Data[0])^ := FInt64;
+  inherited FillColumn(AColumn);
+end;
+
+procedure TBulkLoadFieldInt64.SetColumnSize(AColumn: PColumnData);
+begin
+  AColumn^.Length := SizeOf(FInt64);
 end;
 
 end.
