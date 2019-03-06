@@ -60,10 +60,21 @@ type
     procedure FillColumn(AColumn: PColumnData);
   end;
 
+  IBulkLoadFieldsEnumerator = interface
+    ['{59E1869C-20CE-4DE9-81BC-8EE0C63E1380}']
+  end;
+
+  IBulkLoadFields = interface
+    ['{AE9ED13D-2F1F-423F-8AB6-47B51706DB0F}']
+    function GetEnumerator: TInterfaceListEnumerator;
+    function AddField(AField: IBulkLoadField): IBulkLoadFields;
+  end;
+
   IBulkLoader = interface
     ['{E7795A09-A93A-4532-A5B5-1D670ECEB9CD}']
     function Append(AField: IBulkLoadField): IBulkLoader;
     function AppendRow: IBulkLoader;
+    function AppendFieldsAndRow(AFields: IBulkLoadFields): IBulkLoader;
     procedure Commit;
   end;
 
@@ -217,6 +228,13 @@ type
     constructor Create(const ADateTime: TDateTime);
   end;
 
+  TBulkLoadFields = class(TInterfaceList, IBulkLoadFields)
+  private
+    {$REGION 'IBulkLoadFields'}
+    function AddField(AField: IBulkLoadField): IBulkLoadFields;
+    {$ENDREGION}
+  end;
+
   TMSSQLBulkLoader = class(TInterfacedObject, IBulkLoader)
   private
     FAccessor: IAccessor;
@@ -231,6 +249,7 @@ type
     {$REGION 'IBulkLoader'}
     function Append(AField: IBulkLoadField): IBulkLoader;
     function AppendRow: IBulkLoader;
+    function AppendFieldsAndRow(AFields: IBulkLoadFields): IBulkLoader;
     procedure Commit;
     {$ENDREGION}
     procedure ResetAppendedFieldCount;
@@ -758,6 +777,15 @@ begin
   Result := Self;
 end;
 
+function TMSSQLBulkLoader.AppendFieldsAndRow(AFields: IBulkLoadFields): IBulkLoader;
+var
+  LField: IInterface;
+begin
+  for LField in AFields do
+    Append(LField as IBulkLoadField);
+  Result := AppendRow;
+end;
+
 procedure TMSSQLBulkLoader.BeforeDestruction;
 begin
   if Assigned(FAccessor) then
@@ -956,6 +984,14 @@ end;
 procedure TBulkLoadFieldInt64.SetColumnSize(AColumn: PColumnData);
 begin
   AColumn^.Length := SizeOf(FInt64);
+end;
+
+{ TBulkLoadFields }
+
+function TBulkLoadFields.AddField(AField: IBulkLoadField): IBulkLoadFields;
+begin
+  Add(AField);
+  Result := Self;
 end;
 
 end.
