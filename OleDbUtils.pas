@@ -238,7 +238,6 @@ type
   TMSSQLBulkLoader = class(TInterfacedObject, IBulkLoader)
   private
     FAccessor: IAccessor;
-    FConnection: TADOConnection;
     FFastLoad: IRowsetFastLoad;
     FStatusCodes: PUintArray;
     FBindings: PDBBindingArray;
@@ -793,7 +792,6 @@ begin
   FreeMem(FStatusCodes);
   FreeMem(FBuffer);
   FreeMem(FBindings);
-  FreeAndNil(FConnection);
   inherited;
 end;
 
@@ -810,16 +808,9 @@ var
   i: Integer;
 begin
   inherited Create;
-  FConnection := AConnection;
   FFieldCount := AFields.Count;
   ResetAppendedFieldCount;
-  FConnection.Open;
-  try
-    FFastLoad := OpenFastLoad(FConnection, ADstTableName);
-  except
-    FreeAndNil(FConnection);
-    raise;
-  end;
+  FFastLoad := OpenFastLoad(AConnection, ADstTableName);
   FStatusCodes := AllocMem(FFieldCount * SizeOf(DBBINDSTATUS));
 
   LBufferSize := 0;
